@@ -122,34 +122,31 @@ class BrainZoneVisualizer:
         seizure_mask = self.create_zone_mask(self.seizure_onset_zones, 2, self.hemisphere)
         
         if irritative_mask is not None and seizure_mask is not None:
-            # Для комбинированной визуализации используем разные подходы
-            
-            # Вариант 1: Создаем отдельные маски с разными значениями
-            # и используем кастомную цветовую карту
-            combined_data = np.zeros(self.atlas_data.shape[:3])
-            
-            # Загружаем данные масок
+            # Создаем отдельные маски для каждой зоны
             irritative_data = irritative_mask.get_fdata()
             seizure_data = seizure_mask.get_fdata()
             
-            # Создаем комбинированную маску с разными значениями
-            # Ирритативная зона = 1, Зона приступов = 2, Пересечение = 3
+            # Создаем комбинированную маску с четким разделением
+            combined_data = np.zeros(self.atlas_data.shape[:3])
+            
+            # Назначаем разные значения для каждой зоны
+            # Ирритативная зона = 1
             combined_data[irritative_data > 0] = 1
+            # Зона приступов = 2
             combined_data[seizure_data > 0] = 2
-            # Области пересечения будут иметь значение 3 (1+2)
             
             combined_mask = nib.Nifti1Image(combined_data, self.atlas_img.affine)
             
-            # Создаем кастомную цветовую карту с тремя цветами
-            colors = ['#0000FF', '#FF0000', '#800080']  # Синий, Красный, Фиолетовый (для пересечения)
+            # Создаем кастомную цветовую карту с четким разделением цветов
+            colors = ['#0000FF', '#FF0000']  # Синий для ирритативной, Красный для зоны приступов
             custom_cmap = ListedColormap(colors)
             
             view = plotting.view_img(combined_mask, 
                                    bg_img=self.mni_template,
                                    cmap=custom_cmap, 
                                    opacity=0.7,
-                                   vmin=1, vmax=3,
-                                   title=f"3D визуализация: Ирритативная зона (синий) и Зона начала приступов (красный) - {self.hemisphere} полушарие")
+                                   vmin=0.5, vmax=2.5,  # Расширяем диапазон для четкого разделения
+                                   title=f"SOZ & IZ - {self.hemisphere} полушарие")
             
         elif irritative_mask is not None:
             # Только ирритативная зона - используем синий цвет
@@ -277,9 +274,8 @@ def main():
     with col2:
         st.subheader("Легенда цветов")
         st.markdown("""
-        - 🔵 **Синий** - Ирритативная зона
-        - 🔴 **Красный** - Зона начала приступов
-        - 🟣 **Фиолетовый** - Области пересечения зон
+        - **Синий** - Ирритативная зона
+        - **Красный** - Зона начала приступов
         """)
         
         st.subheader("Статус")
