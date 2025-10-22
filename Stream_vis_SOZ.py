@@ -144,9 +144,9 @@ class BrainZoneVisualizer:
             view = plotting.view_img(combined_mask, 
                                    bg_img=self.mni_template,
                                    cmap=custom_cmap, 
-                                   opacity=0.7,
-                                   vmin=0.5, vmax=2.5,  # Расширяем диапазон для четкого разделения
-                                   title=f"SOZ & IZ - {self.hemisphere} полушарие")
+                                   opacity=0.3,
+                                   vmin=0.5, vmax=6.5,  # Расширяем диапазон для четкого разделения
+                                   title=f"SOZ & IZ")
             
         elif irritative_mask is not None:
             # Только ирритативная зона - используем синий цвет
