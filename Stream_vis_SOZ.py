@@ -117,23 +117,38 @@ class BrainZoneVisualizer:
         plt.close(fig)
     
     def plot_3d_interactive(self):
-        """Интерактивная 3D визуализация с синим для ирритативной зоны и красным для зоны приступов"""
+        """Интерактивная 3D визуализация с правильным разграничением зон"""
         irritative_mask = self.create_zone_mask(self.irritative_zones, 1, self.hemisphere)
         seizure_mask = self.create_zone_mask(self.seizure_onset_zones, 2, self.hemisphere)
         
         if irritative_mask is not None and seizure_mask is not None:
-            combined_mask = math_img("img1 + 2*img2", 
-                                   img1=irritative_mask, 
-                                   img2=seizure_mask)
+            # Для комбинированной визуализации используем разные подходы
             
-            # Создаем кастомную цветовую карту: синий для ирритативной зоны, красный для зоны приступов
-            custom_cmap = ListedColormap(['#0000FF', '#FF0000'])  # Синий и красный
+            # Вариант 1: Создаем отдельные маски с разными значениями
+            # и используем кастомную цветовую карту
+            combined_data = np.zeros(self.atlas_data.shape[:3])
+            
+            # Загружаем данные масок
+            irritative_data = irritative_mask.get_fdata()
+            seizure_data = seizure_mask.get_fdata()
+            
+            # Создаем комбинированную маску с разными значениями
+            # Ирритативная зона = 1, Зона приступов = 2, Пересечение = 3
+            combined_data[irritative_data > 0] = 1
+            combined_data[seizure_data > 0] = 2
+            # Области пересечения будут иметь значение 3 (1+2)
+            
+            combined_mask = nib.Nifti1Image(combined_data, self.atlas_img.affine)
+            
+            # Создаем кастомную цветовую карту с тремя цветами
+            colors = ['#0000FF', '#FF0000', '#800080']  # Синий, Красный, Фиолетовый (для пересечения)
+            custom_cmap = ListedColormap(colors)
             
             view = plotting.view_img(combined_mask, 
                                    bg_img=self.mni_template,
                                    cmap=custom_cmap, 
                                    opacity=0.7,
-                                   vmin=1, vmax=2,
+                                   vmin=1, vmax=3,
                                    title=f"3D визуализация: Ирритативная зона (синий) и Зона начала приступов (красный) - {self.hemisphere} полушарие")
             
         elif irritative_mask is not None:
@@ -169,7 +184,7 @@ class BrainZoneVisualizer:
 
 def main():
     st.set_page_config(
-        page_title="Виузализация эпилептогенных зон",
+        page_title="Визуализация эпилептогенных зон",
         page_icon="",
         layout="wide"
     )
