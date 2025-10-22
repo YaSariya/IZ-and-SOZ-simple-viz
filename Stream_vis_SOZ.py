@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import tempfile
 import os
 from matplotlib.colors import ListedColormap
+from scipy import ndimage
 
 # Кэшируем загрузку данных для производительности
 @st.cache_resource
@@ -75,6 +76,27 @@ class BrainZoneVisualizer:
                 
         return nib.Nifti1Image(mask_data, self.atlas_img.affine)
     
+    def create_outline_mask(self, mask):
+        """Создает контур маски (границы области)"""
+        if mask is None:
+            return None
+            
+        mask_data = mask.get_fdata()
+        
+        # Создаем структуру для морфологических операций (3D куб 3x3x3)
+        structure = np.ones((3, 3, 3))
+        
+        # Расширяем маску
+        dilated = ndimage.binary_dilation(mask_data, structure=structure)
+        
+        # Сжимаем маску
+        eroded = ndimage.binary_erosion(mask_data, structure=structure)
+        
+        # Контур = расширенная маска минус сжатая маска
+        outline = dilated & ~eroded
+        
+        return nib.Nifti1Image(outline.astype(np.float32), mask.affine)
+    
     def plot_3d_glass_brain(self):
         """3D glass brain визуализация с черным фоном"""
         # Создаем маски с учетом выбранного полушария
@@ -92,7 +114,7 @@ class BrainZoneVisualizer:
         elif irritative_mask is not None:
             mask_to_plot = irritative_mask
             cmap = 'Blues'
-            title = f"Ирритативная зона (синий) - {self.hemisphere} полушарие"
+            title = f"IZ"
         elif seizure_mask is not None:
             mask_to_plot = seizure_mask
             cmap = 'Reds'
@@ -117,50 +139,55 @@ class BrainZoneVisualizer:
         plt.close(fig)
     
     def plot_3d_interactive(self):
-        """Интерактивная 3D визуализация с гарантированным разграничением зон"""
+        """Интерактивная 3D визуализация с контуром для ирритативной зоны"""
         irritative_mask = self.create_zone_mask(self.irritative_zones, 1, self.hemisphere)
         seizure_mask = self.create_zone_mask(self.seizure_onset_zones, 2, self.hemisphere)
         
         if irritative_mask is not None and seizure_mask is not None:
+            # Создаем контур для ирритативной зоны
+            irritative_outline = self.create_outline_mask(irritative_mask)
+            
             # Получаем данные масок
-            irritative_data = irritative_mask.get_fdata()
+            irritative_outline_data = irritative_outline.get_fdata()
             seizure_data = seizure_mask.get_fdata()
             
-            # Создаем комбинированную маску с четким разделением
+            # Создаем комбинированную маску
             combined_data = np.zeros(self.atlas_data.shape[:3])
             
-            # Назначаем разные значения для каждой зоны
-            # Ирритативная зона = 10, Зона приступов = 20
-            combined_data[irritative_data > 0] = 10
-            combined_data[seizure_data > 0] = 20
+            # Назначаем значения:
+            # Контур ирритативной зоны = 1
+            # Зона приступов = 2
+            combined_data[irritative_outline_data > 0] = 1
+            combined_data[seizure_data > 0] = 2
             
             combined_mask = nib.Nifti1Image(combined_data, self.atlas_img.affine)
             
-            # Создаем кастомную цветовую карту с четкими цветами
-            # Используем синий для ирритативной и зеленый для зоны приступов
-            colors = ['#0000FF', '#00FF00']  # Синий и Зеленый
+            # Создаем кастомную цветовую карту
+            colors = ['#FFFF00', '#FF0000']  # Желтый для контура, Красный для зоны приступов
             custom_cmap = ListedColormap(colors)
             
             view = plotting.view_img(combined_mask, 
                                    bg_img=self.mni_template,
                                    cmap=custom_cmap, 
                                    opacity=0.7,
-                                   vmin=5, vmax=25,  # Диапазон между значениями зон
+                                   vmin=0.5, vmax=2.5,
                                    title=f"SOZ & IZ")
             
         elif irritative_mask is not None:
-            # Только ирритативная зона - используем синий цвет
-            view = plotting.view_img(irritative_mask, 
+            # Только ирритативная зона - создаем контур
+            irritative_outline = self.create_outline_mask(irritative_mask)
+            
+            view = plotting.view_img(irritative_outline, 
                                    bg_img=self.mni_template,
-                                   cmap='Blues', 
+                                   cmap='YlOrRd', 
                                    opacity=0.7,
                                    title=f"IZ")
             
         elif seizure_mask is not None:
-            # Только зона приступов - используем зеленый цвет
+            # Только зона приступов - используем красный цвет
             view = plotting.view_img(seizure_mask, 
                                    bg_img=self.mni_template,
-                                   cmap='Greens', 
+                                   cmap='Reds', 
                                    opacity=0.7,
                                    title=f"SOZ")
         
@@ -218,7 +245,7 @@ def main():
         
         # Выбор ирритативных зон
         irritative_selected = st.multiselect(
-            "Ирритативная зона (синий):",
+            "Ирритативная зона (контур, желтый):",
             options=visualizer.atlas_labels,
             default=st.session_state.irritative_zones,
             help="Области раздражения коры"
@@ -226,7 +253,7 @@ def main():
         
         # Выбор зон начала приступов
         seizure_selected = st.multiselect(
-            "Зона начала приступов (зеленый):",
+            "Зона начала приступов (красный):",
             options=visualizer.atlas_labels,
             default=st.session_state.seizure_onset_zones,
             help="Области начала эпилептических приступов"
@@ -262,20 +289,20 @@ def main():
         st.write(f"**Полушарие:** {hemisphere}")
         
         if visualizer.irritative_zones:
-            st.write("**Ирритативная зона (синий):**")
+            st.write("**Ирритативная зона (контур, желтый):**")
             for zone in visualizer.irritative_zones:
                 st.write(f"- {zone}")
         
         if visualizer.seizure_onset_zones:
-            st.write("**Зона начала приступов (зеленый):**")
+            st.write("**Зона начала приступов (красный):**")
             for zone in visualizer.seizure_onset_zones:
                 st.write(f"- {zone}")
     
     with col2:
         st.subheader("Легенда цветов")
         st.markdown("""
-        - 🔵 **Синий** - Ирритативная зона
-        - 🟢 **Зеленый** - Зона начала приступов
+        - **Желтый контур** - Ирритативная зона
+        - **Красный** - Зона начала приступов
         """)
         
         st.subheader("Статус")
