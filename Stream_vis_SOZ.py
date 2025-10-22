@@ -88,7 +88,7 @@ class BrainZoneVisualizer:
                                    img2=seizure_mask)
             mask_to_plot = combined_mask
             cmap = 'coolwarm'
-            title = f"Комбинированная визуализация: Ирритативная зона (синий) и Зона начала приступов (красный) - {self.hemisphere} полушарие"
+            title = f"SOZ & IZ"
         elif irritative_mask is not None:
             mask_to_plot = irritative_mask
             cmap = 'Blues'
@@ -96,7 +96,7 @@ class BrainZoneVisualizer:
         elif seizure_mask is not None:
             mask_to_plot = seizure_mask
             cmap = 'Reds'
-            title = f"Зона начала приступов (красный) - {self.hemisphere} полушарие"
+            title = f"SOZ"
         else:
             st.warning("Не выбраны зоны для визуализации")
             return
@@ -117,12 +117,12 @@ class BrainZoneVisualizer:
         plt.close(fig)
     
     def plot_3d_interactive(self):
-        """Интерактивная 3D визуализация с правильным разграничением зон"""
+        """Интерактивная 3D визуализация с гарантированным разграничением зон"""
         irritative_mask = self.create_zone_mask(self.irritative_zones, 1, self.hemisphere)
         seizure_mask = self.create_zone_mask(self.seizure_onset_zones, 2, self.hemisphere)
         
         if irritative_mask is not None and seizure_mask is not None:
-            # Создаем отдельные маски для каждой зоны
+            # Получаем данные масок
             irritative_data = irritative_mask.get_fdata()
             seizure_data = seizure_mask.get_fdata()
             
@@ -130,22 +130,22 @@ class BrainZoneVisualizer:
             combined_data = np.zeros(self.atlas_data.shape[:3])
             
             # Назначаем разные значения для каждой зоны
-            # Ирритативная зона = 1
-            combined_data[irritative_data > 0] = 1
-            # Зона приступов = 2
-            combined_data[seizure_data > 0] = 2
+            # Ирритативная зона = 10, Зона приступов = 20
+            combined_data[irritative_data > 0] = 10
+            combined_data[seizure_data > 0] = 20
             
             combined_mask = nib.Nifti1Image(combined_data, self.atlas_img.affine)
             
-            # Создаем кастомную цветовую карту с четким разделением цветов
-            colors = ['#0000FF', '#FF0000']  # Синий для ирритативной, Красный для зоны приступов
+            # Создаем кастомную цветовую карту с четкими цветами
+            # Используем синий для ирритативной и зеленый для зоны приступов
+            colors = ['#0000FF', '#00FF00']  # Синий и Зеленый
             custom_cmap = ListedColormap(colors)
             
             view = plotting.view_img(combined_mask, 
                                    bg_img=self.mni_template,
                                    cmap=custom_cmap, 
-                                   opacity=0.3,
-                                   vmin=0.5, vmax=6.5,  # Расширяем диапазон для четкого разделения
+                                   opacity=0.7,
+                                   vmin=5, vmax=25,  # Диапазон между значениями зон
                                    title=f"SOZ & IZ")
             
         elif irritative_mask is not None:
@@ -154,15 +154,15 @@ class BrainZoneVisualizer:
                                    bg_img=self.mni_template,
                                    cmap='Blues', 
                                    opacity=0.7,
-                                   title=f"3D визуализация: Ирритативная зона (синий) - {self.hemisphere} полушарие")
+                                   title=f"IZ")
             
         elif seizure_mask is not None:
-            # Только зона приступов - используем красный цвет
+            # Только зона приступов - используем зеленый цвет
             view = plotting.view_img(seizure_mask, 
                                    bg_img=self.mni_template,
-                                   cmap='Reds', 
+                                   cmap='Greens', 
                                    opacity=0.7,
-                                   title=f"3D визуализация: Зона начала приступов (красный) - {self.hemisphere} полушарие")
+                                   title=f"SOZ")
         
         else:
             st.warning("Не выбраны зоны для визуализации")
@@ -226,7 +226,7 @@ def main():
         
         # Выбор зон начала приступов
         seizure_selected = st.multiselect(
-            "Зона начала приступов (красный):",
+            "Зона начала приступов (зеленый):",
             options=visualizer.atlas_labels,
             default=st.session_state.seizure_onset_zones,
             help="Области начала эпилептических приступов"
@@ -267,15 +267,15 @@ def main():
                 st.write(f"- {zone}")
         
         if visualizer.seizure_onset_zones:
-            st.write("**Зона начала приступов (красный):**")
+            st.write("**Зона начала приступов (зеленый):**")
             for zone in visualizer.seizure_onset_zones:
                 st.write(f"- {zone}")
     
     with col2:
         st.subheader("Легенда цветов")
         st.markdown("""
-        - **Синий** - Ирритативная зона
-        - **Красный** - Зона начала приступов
+        - 🔵 **Синий** - Ирритативная зона
+        - 🟢 **Зеленый** - Зона начала приступов
         """)
         
         st.subheader("Статус")
