@@ -1,33 +1,37 @@
+import streamlit as st
 import numpy as np
 import nibabel as nib
 from nilearn import datasets, plotting, image
 from nilearn.image import math_img
 import matplotlib.pyplot as plt
-import ipywidgets as widgets
-from IPython.display import display, clear_output
+import tempfile
+import os
+
+# Кэшируем загрузку данных для производительности
+@st.cache_resource
+def load_brain_data():
+    """Загрузка данных атласа и шаблона мозга"""
+    st.info("Загрузка Harvard-Oxford Cortical Atlas...")
+    ho_atlas = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm')
+    mni_template = datasets.load_mni152_template()
+    return ho_atlas, mni_template
 
 class BrainZoneVisualizer:
-    def __init__(self):
+    def __init__(self, ho_atlas, mni_template):
         self.irritative_zones = []
         self.seizure_onset_zones = []
         self.hemisphere = "Оба"  # По умолчанию оба полушария
         
-        # Загрузка Harvard-Oxford cortical atlas
-        print("Загрузка Harvard-Oxford Cortical Atlas...")
-        self.ho_atlas = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm')
-        
         # В Harvard-Oxford atlas maps уже является NiftiImage объектом
-        self.atlas_img = self.ho_atlas.maps
+        self.atlas_img = ho_atlas.maps
         self.atlas_data = self.atlas_img.get_fdata()
-        self.atlas_labels = self.ho_atlas.labels
-        
-        # Загрузка стандартного мозга MNI152 для фона
-        self.mni_template = datasets.load_mni152_template()
+        self.atlas_labels = ho_atlas.labels
+        self.mni_template = mni_template
         
         # Создаем маску для полушарий
         self.create_hemisphere_masks()
         
-        print(f"Загружено регионов: {len(self.atlas_labels)}")
+        st.success(f"Загружено регионов: {len(self.atlas_labels)}")
     
     def create_hemisphere_masks(self):
         """Создает маски для левого и правого полушарий"""
@@ -63,9 +67,9 @@ class BrainZoneVisualizer:
                 # Если "Оба", оставляем как есть
                 
                 mask_data[zone_mask] = value
-                print(f"Добавлен регион: {zone_name} (индекс {zone_idx})")
+                st.write(f"Добавлен регион: {zone_name}")
             except ValueError:
-                print(f"Регион '{zone_name}' не найден в атласе")
+                st.warning(f"Регион '{zone_name}' не найден в атласе")
                 continue
                 
         return nib.Nifti1Image(mask_data, self.atlas_img.affine)
@@ -79,7 +83,7 @@ class BrainZoneVisualizer:
         # Комбинированная маска
         if irritative_mask is not None and seizure_mask is not None:
             combined_mask = math_img("img1 + 2*img2", img1=irritative_mask, img2=seizure_mask)
-            title = f"Ирритативная зона (красный) и Зона начала приступов (синий) - {self.hemisphere} полушарие"
+            title = f"Ирритативная зона и Зона начала приступов - {self.hemisphere} полушарие"
             cmap = 'coolwarm'
         elif irritative_mask is not None:
             combined_mask = irritative_mask
@@ -90,7 +94,7 @@ class BrainZoneVisualizer:
             title = f"Зона начала приступов - {self.hemisphere} полушарие"
             cmap = 'Blues'
         else:
-            print("Не выбраны зоны для визуализации")
+            st.warning("Не выбраны зоны для визуализации")
             return
         
         # Создаем отдельную фигуру для 2D срезов
@@ -101,10 +105,11 @@ class BrainZoneVisualizer:
                          bg_img=self.mni_template,
                          cmap=cmap, 
                          alpha=0.7,
-                         display_mode='ortho',  # Автоматически создает 3 проекции
+                         display_mode='ortho',
                          title=title)
         
-        plt.show()
+        st.pyplot(fig)
+        plt.close(fig)
     
     def plot_3d_glass_brain(self):
         """3D glass brain визуализация"""
@@ -119,7 +124,7 @@ class BrainZoneVisualizer:
                                    img2=seizure_mask)
             mask_to_plot = combined_mask
             cmap = 'coolwarm'
-            title = f"Комбинированная визуализация: Ирритативная зона (красный) и Зона начала приступов (синий) - {self.hemisphere} полушарие"
+            title = f"Комбинированная визуализация: Ирритативная зона и Зона начала приступов - {self.hemisphere} полушарие"
         elif irritative_mask is not None:
             mask_to_plot = irritative_mask
             cmap = 'Reds'
@@ -129,13 +134,13 @@ class BrainZoneVisualizer:
             cmap = 'Blues'
             title = f"Зона начала приступов - {self.hemisphere} полушарие"
         else:
-            print("Не выбраны зоны для визуализации")
+            st.warning("Не выбраны зоны для визуализации")
             return
         
         # Создаем фигуру для 3D визуализации
         fig = plt.figure(figsize=(16, 6))
         
-        # Визуализация glass brain в двух проекциях
+        # Визуализация glass brain
         plotting.plot_glass_brain(mask_to_plot, 
                                 display_mode='lzr', 
                                 cmap=cmap, 
@@ -143,10 +148,11 @@ class BrainZoneVisualizer:
                                 title=title,
                                 figure=fig)
         
-        plt.show()
+        st.pyplot(fig)
+        plt.close(fig)
     
     def plot_3d_interactive(self):
-        """Интерактивная 3D визуализация"""
+        """Интерактивная 3D визуализация - сохраняем как HTML"""
         irritative_mask = self.create_zone_mask(self.irritative_zones, 1)
         seizure_mask = self.create_zone_mask(self.seizure_onset_zones, 2)
         
@@ -159,8 +165,7 @@ class BrainZoneVisualizer:
                                    bg_img=self.mni_template,
                                    cmap='coolwarm', 
                                    opacity=0.7,
-                                   title=f"3D визуализация: Ирритативная зона (красный) и Зона начала приступов (синий) - {self.hemisphere} полушарие")
-            return view
+                                   title=f"3D визуализация: Ирритативная зона и Зона начала приступов - {self.hemisphere} полушарие")
             
         elif irritative_mask is not None:
             view = plotting.view_img(irritative_mask, 
@@ -168,7 +173,6 @@ class BrainZoneVisualizer:
                                    cmap='Reds', 
                                    opacity=0.7,
                                    title=f"3D визуализация: Ирритативная зона - {self.hemisphere} полушарие")
-            return view
             
         elif seizure_mask is not None:
             view = plotting.view_img(seizure_mask, 
@@ -176,168 +180,166 @@ class BrainZoneVisualizer:
                                    cmap='Blues', 
                                    opacity=0.7,
                                    title=f"3D визуализация: Зона начала приступов - {self.hemisphere} полушарие")
-            return view
         
         else:
-            print("Не выбраны зоны для визуализации")
+            st.warning("Не выбраны зоны для визуализации")
             return None
+        
+        # Сохраняем как временный HTML файл
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as tmp_file:
+            view.save_as_html(tmp_file.name)
+            return tmp_file.name
 
     def show_atlas_labels(self):
         """Показать все доступные регионы атласа"""
-        print("Доступные регионы Harvard-Oxford Cortical Atlas:")
+        st.subheader("Доступные регионы Harvard-Oxford Cortical Atlas:")
         for i, label in enumerate(self.atlas_labels):
-            print(f"{i+1:2d}. {label}")
+            st.write(f"{i+1:2d}. {label}")
 
-# Создаем интерфейс для выбора зон
-def create_interface():
-    visualizer = BrainZoneVisualizer()
-    
-    # Показываем доступные регионы
-    visualizer.show_atlas_labels()
-    
-    # Виджет для выбора полушария
-    hemisphere_dropdown = widgets.Dropdown(
-        options=["Левое", "Правое", "Оба"],
-        value="Оба",
-        description='Полушарие:',
-        disabled=False,
-        layout=widgets.Layout(width='50%')
+def main():
+    st.set_page_config(
+        page_title="Визуализация эпилептогенных зон",
+        page_icon="",
+        layout="wide"
     )
     
-    # Выпадающие списки для выбора зон
-    irritative_dropdown = widgets.SelectMultiple(
-        options=visualizer.atlas_labels,
-        description='Ирритативная зона:',
-        disabled=False,
-        layout=widgets.Layout(width='80%', height='150px')
-    )
+    st.title("Визуализация эпилептогенных зон")
+    st.markdown("### Harvard-Oxford Cortical Atlas")
     
-    seizure_dropdown = widgets.SelectMultiple(
-        options=visualizer.atlas_labels,
-        description='Зона начала приступов:',
-        disabled=False,
-        layout=widgets.Layout(width='80%', height='150px')
-    )
+    # Загрузка данных
+    ho_atlas, mni_template = load_brain_data()
+    visualizer = BrainZoneVisualizer(ho_atlas, mni_template)
     
-    # Кнопки для визуализации
-    button_2d = widgets.Button(description="2D срезы", button_style='primary')
-    button_3d = widgets.Button(description="3D Glass Brain", button_style='primary')
-    button_interactive = widgets.Button(description="Интерактивная 3D", button_style='success')
-    button_clear = widgets.Button(description="Очистить", button_style='warning')
-    button_show_labels = widgets.Button(description="Показать регионы")
+    # Инициализация состояния сессии
+    if 'irritative_zones' not in st.session_state:
+        st.session_state.irritative_zones = []
+    if 'seizure_onset_zones' not in st.session_state:
+        st.session_state.seizure_onset_zones = []
+    if 'hemisphere' not in st.session_state:
+        st.session_state.hemisphere = "Оба"
     
-    output = widgets.Output()
+    # Боковая панель для выбора зон
+    with st.sidebar:
+        st.header("Выбор зон")
+        
+        # Выбор полушария
+        hemisphere = st.radio(
+            "Выберите полушарие:",
+            options=["Левое", "Правое", "Оба"],
+            index=2,  # По умолчанию "Оба"
+            help="Выберите полушарие для визуализации"
+        )
+        
+        visualizer.hemisphere = hemisphere
+        st.session_state.hemisphere = hemisphere
+        
+        # Выбор ирритативных зон
+        irritative_selected = st.multiselect(
+            "Ирритативная зона:",
+            options=visualizer.atlas_labels,
+            default=st.session_state.irritative_zones,
+            help="Области раздражения коры"
+        )
+        
+        # Выбор зон начала приступов
+        seizure_selected = st.multiselect(
+            "Зона начала приступов:",
+            options=visualizer.atlas_labels,
+            default=st.session_state.seizure_onset_zones,
+            help="Области начала эпилептических приступов"
+        )
+        
+        # Кнопки управления
+        col1, col2 = st.columns(2)
+        with col1:
+            show_labels = st.button("📋 Показать регионы")
+        with col2:
+            clear_all = st.button("🗑️ Очистить всё")
+        
+        # Кнопки визуализации
+        st.markdown("---")
+        st.subheader("Визуализация")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            plot_2d = st.button("🖼️ 2D срезы")
+        with col2:
+            plot_3d = st.button("🧊 3D Glass Brain")
+        with col3:
+            plot_interactive = st.button("🎮 Интерактивная 3D")
     
-    def on_hemisphere_change(change):
-        visualizer.hemisphere = change['new']
-        with output:
-            print(f"Выбрано полушарие: {change['new']}")
+    # Обновление состояния
+    visualizer.irritative_zones = irritative_selected
+    visualizer.seizure_onset_zones = seizure_selected
+    st.session_state.irritative_zones = irritative_selected
+    st.session_state.seizure_onset_zones = seizure_selected
     
-    def on_irritative_change(change):
-        visualizer.irritative_zones = list(change['new'])
-        with output:
-            if visualizer.irritative_zones:
-                print(f"Ирритативная зона: {', '.join(visualizer.irritative_zones)}")
+    # Основная область контента
+    col1, col2 = st.columns(2)
     
-    def on_seizure_change(change):
-        visualizer.seizure_onset_zones = list(change['new'])
-        with output:
-            if visualizer.seizure_onset_zones:
-                print(f"Зона начала приступов: {', '.join(visualizer.seizure_onset_zones)}")
+    with col1:
+        st.subheader("Выбранные зоны")
+        st.write(f"**Полушарие:** {hemisphere}")
+        
+        if visualizer.irritative_zones:
+            st.write("**Ирритативная зона:**")
+            for zone in visualizer.irritative_zones:
+                st.write(f"- {zone}")
+        
+        if visualizer.seizure_onset_zones:
+            st.write("**Зона начала приступов:**")
+            for zone in visualizer.seizure_onset_zones:
+                st.write(f"- {zone}")
     
-    def on_2d_click(b):
-        with output:
-            clear_output()
-            print("Создание 2D визуализации...")
-            visualizer.plot_2d_slices()
+    with col2:
+        st.subheader("Статус")
+        if not visualizer.irritative_zones and not visualizer.seizure_onset_zones:
+            st.info("Выберите зоны для визуализации в боковой панели")
+        else:
+            st.success(f"Выбрано зон: {len(visualizer.irritative_zones) + len(visualizer.seizure_onset_zones)}")
     
-    def on_3d_click(b):
-        with output:
-            clear_output()
-            print("Создание 3D Glass Brain визуализации...")
-            visualizer.plot_3d_glass_brain()
+    # Обработка действий
+    if show_labels:
+        st.subheader("Все доступные регионы")
+        visualizer.show_atlas_labels()
     
-    def on_interactive_click(b):
-        with output:
-            clear_output()
-            print("Создание интерактивной 3D визуализации...")
-            view = visualizer.plot_3d_interactive()
-            if view:
-                display(view)
+    if clear_all:
+        st.session_state.irritative_zones = []
+        st.session_state.seizure_onset_zones = []
+        st.session_state.hemisphere = "Оба"
+        st.rerun()
     
-    def on_clear_click(b):
-        visualizer.irritative_zones = []
-        visualizer.seizure_onset_zones = []
-        visualizer.hemisphere = "Оба"
-        irritative_dropdown.value = ()
-        seizure_dropdown.value = ()
-        hemisphere_dropdown.value = "Оба"
-        with output:
-            clear_output()
-            print("Зоны очищены, полушарие сброшено на 'Оба'")
+    if plot_2d:
+        st.subheader("2D срезы")
+        visualizer.plot_2d_slices()
     
-    def on_show_labels_click(b):
-        with output:
-            clear_output()
-            visualizer.show_atlas_labels()
+    if plot_3d:
+        st.subheader("3D Glass Brain")
+        visualizer.plot_3d_glass_brain()
     
-    # Подписываемся на события
-    hemisphere_dropdown.observe(on_hemisphere_change, names='value')
-    irritative_dropdown.observe(on_irritative_change, names='value')
-    seizure_dropdown.observe(on_seizure_change, names='value')
-    button_2d.on_click(on_2d_click)
-    button_3d.on_click(on_3d_click)
-    button_interactive.on_click(on_interactive_click)
-    button_clear.on_click(on_clear_click)
-    button_show_labels.on_click(on_show_labels_click)
-    
-    # Компоновка интерфейса
-    controls = widgets.VBox([
-        widgets.HTML("<h2> Визуализация эпилептогенных зон</h2>"),
-        widgets.HTML("<h4>Harvard-Oxford Cortical Atlas</h4>"),
-        hemisphere_dropdown,
-        widgets.HBox([
-            widgets.VBox([
-                irritative_dropdown,
-                widgets.HTML("<i>Области раздражения коры</i>")
-            ]),
-            widgets.VBox([
-                seizure_dropdown,
-                widgets.HTML("<i>Области начала эпилептических приступов</i>")
-            ])
-        ]),
-        widgets.HBox([button_2d, button_3d, button_interactive, button_clear, button_show_labels])
-    ])
-    
-    display(widgets.VBox([controls, output]))
+    if plot_interactive:
+        st.subheader("Интерактивная 3D визуализация")
+        st.info("Генерируется интерактивная 3D модель... Это может занять несколько секунд.")
+        
+        html_file = visualizer.plot_3d_interactive()
+        if html_file:
+            # Читаем HTML файл и отображаем его
+            with open(html_file, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            # Отображаем HTML контент
+            st.components.v1.html(html_content, height=600, scrolling=True)
+            
+            # Предлагаем скачать HTML файл
+            with open(html_file, 'rb') as f:
+                st.download_button(
+                    label="💾 Скачать интерактивную 3D модель",
+                    data=f,
+                    file_name="brain_3d_visualization.html",
+                    mime="text/html"
+                )
+            
+            # Удаляем временный файл
+            os.unlink(html_file)
 
-# Пример использования с типичными эпилептогенными зонами
-def example_epilepsy_zones():
-    """Пример визуализации типичных эпилептогенных зон"""
-    visualizer = BrainZoneVisualizer()
-    
-    # Типичные ирритативные зоны при височной эпилепсии
-    visualizer.irritative_zones = [
-        'Frontal Pole',
-        'Superior Frontal Gyrus',
-        'Middle Frontal Gyrus'
-    ]
-    
-    # Типичные зоны начала приступов
-    visualizer.seizure_onset_zones = [
-        'Hippocampal Formation',  # Часто вовлечена при височной эпилепсии
-        'Parahippocampal Gyrus, anterior division',
-        'Superior Temporal Gyrus, anterior division'
-    ]
-    
-    print("Пример: типичные эпилептогенные зоны")
-    visualizer.plot_2d_slices()
-    
-    # Интерактивная 3D визуализация
-    view = visualizer.plot_3d_interactive()
-    if view:
-        display(view)
-
-# Запуск интерфейса
-print("Инициализация визуализатора зон мозга...")
-create_interface()
+if __name__ == "__main__":
+    main()
