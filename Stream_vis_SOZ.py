@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import streamlit as st
 import numpy as np
 import nibabel as nib
@@ -12,6 +6,7 @@ from nilearn.image import math_img
 import matplotlib.pyplot as plt
 import tempfile
 import os
+from matplotlib.colors import ListedColormap
 
 # Кэшируем загрузку данных для производительности
 @st.cache_resource
@@ -57,7 +52,7 @@ class BrainZoneVisualizer:
         return nib.Nifti1Image(mask_data, self.atlas_img.affine)
     
     def plot_2d_slices(self):
-        """2D визуализация на срезах"""
+        """2D визуализация на срезах с черным фоном"""
         # Создаем маски
         irritative_mask = self.create_zone_mask(self.irritative_zones, 1)
         seizure_mask = self.create_zone_mask(self.seizure_onset_zones, 2)
@@ -80,21 +75,22 @@ class BrainZoneVisualizer:
             return
         
         # Создаем отдельную фигуру для 2D срезов
-        fig = plt.figure(figsize=(15, 5))
+        fig = plt.figure(figsize=(15, 5), facecolor='black')
         
-        # Визуализация в трех проекциях с использованием display_mode
+        # Визуализация в трех проекциях с использованием display_mode и черным фоном
         plotting.plot_roi(combined_mask, 
                          bg_img=self.mni_template,
                          cmap=cmap, 
                          alpha=0.7,
                          display_mode='ortho',
-                         title=title)
+                         title=title,
+                         black_bg=True)  # Черный фон
         
         st.pyplot(fig)
         plt.close(fig)
     
     def plot_3d_glass_brain(self):
-        """3D glass brain визуализация"""
+        """3D glass brain визуализация с черным фоном"""
         # Создаем маски
         irritative_mask = self.create_zone_mask(self.irritative_zones, 1)
         seizure_mask = self.create_zone_mask(self.seizure_onset_zones, 2)
@@ -120,21 +116,22 @@ class BrainZoneVisualizer:
             return
         
         # Создаем фигуру для 3D визуализации
-        fig = plt.figure(figsize=(16, 6))
+        fig = plt.figure(figsize=(16, 6), facecolor='black')
         
-        # Визуализация glass brain
+        # Визуализация glass brain с черным фоном
         plotting.plot_glass_brain(mask_to_plot, 
                                 display_mode='lzr', 
                                 cmap=cmap, 
                                 alpha=0.7,
                                 title=title,
-                                figure=fig)
+                                figure=fig,
+                                black_bg=True)  # Черный фон
         
         st.pyplot(fig)
         plt.close(fig)
     
     def plot_3d_interactive(self):
-        """Интерактивная 3D визуализация - сохраняем как HTML"""
+        """Интерактивная 3D визуализация с бежевым цветом для ирритативной зоны"""
         irritative_mask = self.create_zone_mask(self.irritative_zones, 1)
         seizure_mask = self.create_zone_mask(self.seizure_onset_zones, 2)
         
@@ -143,18 +140,25 @@ class BrainZoneVisualizer:
                                    img1=irritative_mask, 
                                    img2=seizure_mask)
             
+            # Создаем кастомную цветовую карту: бежевый для ирритативной зоны, синий для зоны приступов
+            custom_cmap = ListedColormap(['#F5F5DC', '#0000FF'])  # Бежевый и синий
+            
             view = plotting.view_img(combined_mask, 
                                    bg_img=self.mni_template,
-                                   cmap='coolwarm', 
+                                   cmap=custom_cmap, 
                                    opacity=0.7,
-                                   title="3D визуализация: Ирритативная зона (красный) и Зона начала приступов (синий)")
+                                   vmin=1, vmax=2,
+                                   title="3D визуализация: Ирритативная зона (бежевый) и Зона начала приступов (синий)")
             
         elif irritative_mask is not None:
+            # Только ирритативная зона - используем бежевый цвет
+            custom_cmap = ListedColormap(['#F5F5DC'])  # Бежевый
+            
             view = plotting.view_img(irritative_mask, 
                                    bg_img=self.mni_template,
-                                   cmap='Reds', 
+                                   cmap=custom_cmap, 
                                    opacity=0.7,
-                                   title="3D визуализация: Ирритативная зона")
+                                   title="3D визуализация: Ирритативная зона (бежевый)")
             
         elif seizure_mask is not None:
             view = plotting.view_img(seizure_mask, 
@@ -276,10 +280,12 @@ def main():
     
     if plot_2d:
         st.subheader("2D срезы")
+        st.info("2D визуализация с черным фоном")
         visualizer.plot_2d_slices()
     
     if plot_3d:
         st.subheader("3D Glass Brain")
+        st.info("3D визуализация с черным фоном")
         visualizer.plot_3d_glass_brain()
     
     if plot_interactive:
@@ -307,8 +313,7 @@ def main():
             # Удаляем временный файл
             os.unlink(html_file)
 
-    
+
 
 if __name__ == "__main__":
     main()
-
