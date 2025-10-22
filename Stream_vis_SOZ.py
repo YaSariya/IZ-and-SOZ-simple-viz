@@ -180,12 +180,12 @@ class BrainZoneVisualizer:
 
 def main():
     st.set_page_config(
-        page_title="🧠 Визуализатор эпилептогенных зон",
-        page_icon="🧠",
+        page_title="Визуализация эпилептогенных зон",
+        page_icon="",
         layout="wide"
     )
     
-    st.title("🧠 Визуализатор эпилептогенных зон")
+    st.title("Визуализация эпилептогенных зон")
     st.markdown("### Harvard-Oxford Cortical Atlas")
     
     # Загрузка данных
