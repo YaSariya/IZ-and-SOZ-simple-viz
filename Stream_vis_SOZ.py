@@ -6,7 +6,6 @@ from nilearn.image import math_img
 import matplotlib.pyplot as plt
 import tempfile
 import os
-from matplotlib.colors import ListedColormap
 from scipy import ndimage
 
 # Кэшируем загрузку данных для производительности
@@ -110,15 +109,15 @@ class BrainZoneVisualizer:
                                    img2=seizure_mask)
             mask_to_plot = combined_mask
             cmap = 'coolwarm'
-            title = f"SOZ & IZ"
+            title = f"Комбинированная визуализация: Ирритативная зона (синий) и Зона начала приступов (красный) - {self.hemisphere} полушарие"
         elif irritative_mask is not None:
             mask_to_plot = irritative_mask
             cmap = 'Blues'
-            title = f"IZ"
+            title = f"Ирритативная зона (синий) - {self.hemisphere} полушарие"
         elif seizure_mask is not None:
             mask_to_plot = seizure_mask
             cmap = 'Reds'
-            title = f"SOZ"
+            title = f"Зона начала приступов (красный) - {self.hemisphere} полушарие"
         else:
             st.warning("Не выбраны зоны для визуализации")
             return
@@ -151,27 +150,24 @@ class BrainZoneVisualizer:
             irritative_outline_data = irritative_outline.get_fdata()
             seizure_data = seizure_mask.get_fdata()
             
-            # Создаем комбинированную маску
+            # Создаем комбинированную маску с разными значениями для каждой зоны
             combined_data = np.zeros(self.atlas_data.shape[:3])
             
             # Назначаем значения:
-            # Контур ирритативной зоны = 1
-            # Зона приступов = 2
-            combined_data[irritative_outline_data > 0] = 1
-            combined_data[seizure_data > 0] = 2
+            # Контур ирритативной зоны = 10
+            # Зона приступов = 20
+            combined_data[irritative_outline_data > 0] = 10
+            combined_data[seizure_data > 0] = 20
             
             combined_mask = nib.Nifti1Image(combined_data, self.atlas_img.affine)
             
-            # Создаем кастомную цветовую карту
-            colors = ['#FFFF00', '#FF0000']  # Желтый для контура, Красный для зоны приступов
-            custom_cmap = ListedColormap(colors)
-            
+            # Используем стандартную цветовую карту с разными цветами для разных значений
             view = plotting.view_img(combined_mask, 
                                    bg_img=self.mni_template,
-                                   cmap=custom_cmap, 
+                                   cmap='Set1',  # Используем стандартную цветовую карту с разными цветами
                                    opacity=0.7,
-                                   vmin=0.5, vmax=2.5,
-                                   title=f"SOZ & IZ")
+                                   vmin=5, vmax=25,
+                                   title=f"3D визуализация: Ирритативная зона (контур) и Зона начала приступов - {self.hemisphere} полушарие")
             
         elif irritative_mask is not None:
             # Только ирритативная зона - создаем контур
@@ -179,9 +175,9 @@ class BrainZoneVisualizer:
             
             view = plotting.view_img(irritative_outline, 
                                    bg_img=self.mni_template,
-                                   cmap='YlOrRd', 
+                                   cmap='viridis', 
                                    opacity=0.7,
-                                   title=f"IZ")
+                                   title=f"3D визуализация: Ирритативная зона (контур) - {self.hemisphere} полушарие")
             
         elif seizure_mask is not None:
             # Только зона приступов - используем красный цвет
@@ -189,7 +185,7 @@ class BrainZoneVisualizer:
                                    bg_img=self.mni_template,
                                    cmap='Reds', 
                                    opacity=0.7,
-                                   title=f"SOZ")
+                                   title=f"3D визуализация: Зона начала приступов - {self.hemisphere} полушарие")
         
         else:
             st.warning("Не выбраны зоны для визуализации")
@@ -245,7 +241,7 @@ def main():
         
         # Выбор ирритативных зон
         irritative_selected = st.multiselect(
-            "Ирритативная зона (контур, желтый):",
+            "Ирритативная зона (контур):",
             options=visualizer.atlas_labels,
             default=st.session_state.irritative_zones,
             help="Области раздражения коры"
@@ -253,7 +249,7 @@ def main():
         
         # Выбор зон начала приступов
         seizure_selected = st.multiselect(
-            "Зона начала приступов (красный):",
+            "Зона начала приступов:",
             options=visualizer.atlas_labels,
             default=st.session_state.seizure_onset_zones,
             help="Области начала эпилептических приступов"
@@ -289,20 +285,21 @@ def main():
         st.write(f"**Полушарие:** {hemisphere}")
         
         if visualizer.irritative_zones:
-            st.write("**Ирритативная зона (контур, желтый):**")
+            st.write("**Ирритативная зона (контур):**")
             for zone in visualizer.irritative_zones:
                 st.write(f"- {zone}")
         
         if visualizer.seizure_onset_zones:
-            st.write("**Зона начала приступов (красный):**")
+            st.write("**Зона начала приступов:**")
             for zone in visualizer.seizure_onset_zones:
                 st.write(f"- {zone}")
     
     with col2:
-        st.subheader("Легенда цветов")
+        st.subheader("Легенда")
         st.markdown("""
-        - **Желтый контур** - Ирритативная зона
-        - **Красный** - Зона начала приступов
+        - **Контур** - Ирритативная зона
+        - **Заливка** - Зона начала приступов
+        - **Разные цвета** - Автоматически назначаются для различия зон
         """)
         
         st.subheader("Статус")
@@ -351,6 +348,22 @@ def main():
             
             # Удаляем временный файл
             os.unlink(html_file)
+
+    # Пример использования
+    with st.expander("📚 Пример использования"):
+        st.markdown("""
+        **Типичные эпилептогенные зоны:**
+        
+        - **Ирритативная зона (контур):** Frontal Pole, Superior Frontal Gyrus, Middle Frontal Gyrus
+        - **Зона начала приступов:** Hippocampal Formation, Parahippocampal Gyrus (anterior), Superior Temporal Gyrus (anterior)
+        
+        **Выбор полушария:**
+        - **Левое** - показывать зоны только в левом полушарии
+        - **Правое** - показывать зоны только в правом полушарии  
+        - **Оба** - показывать зоны в обоих полушариях
+        
+        Выберите эти зоны в боковой панели и нажмите кнопку визуализации для просмотра.
+        """)
 
 if __name__ == "__main__":
     main()
