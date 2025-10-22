@@ -83,15 +83,15 @@ class BrainZoneVisualizer:
         # Комбинированная маска
         if irritative_mask is not None and seizure_mask is not None:
             combined_mask = math_img("img1 + 2*img2", img1=irritative_mask, img2=seizure_mask)
-            title = f"Ирритативная зона и Зона начала приступов - {self.hemisphere} полушарие"
+            title = f"SOZ & IZ"
             cmap = 'coolwarm'
         elif irritative_mask is not None:
             combined_mask = irritative_mask
-            title = f"Ирритативная зона - {self.hemisphere} полушарие"
+            title = f"IZ"
             cmap = 'Reds'
         elif seizure_mask is not None:
             combined_mask = seizure_mask
-            title = f"Зона начала приступов - {self.hemisphere} полушарие"
+            title = f"SOZ"
             cmap = 'Blues'
         else:
             st.warning("Не выбраны зоны для визуализации")
@@ -124,15 +124,15 @@ class BrainZoneVisualizer:
                                    img2=seizure_mask)
             mask_to_plot = combined_mask
             cmap = 'coolwarm'
-            title = f"Комбинированная визуализация: Ирритативная зона и Зона начала приступов - {self.hemisphere} полушарие"
+            title = f"SOZ & IZ"
         elif irritative_mask is not None:
             mask_to_plot = irritative_mask
             cmap = 'Reds'
-            title = f"Ирритативная зона - {self.hemisphere} полушарие"
+            title = f"IZ"
         elif seizure_mask is not None:
             mask_to_plot = seizure_mask
             cmap = 'Blues'
-            title = f"Зона начала приступов - {self.hemisphere} полушарие"
+            title = f"SOZ"
         else:
             st.warning("Не выбраны зоны для визуализации")
             return
@@ -165,21 +165,21 @@ class BrainZoneVisualizer:
                                    bg_img=self.mni_template,
                                    cmap='coolwarm', 
                                    opacity=0.7,
-                                   title=f"3D визуализация: Ирритативная зона и Зона начала приступов - {self.hemisphere} полушарие")
+                                   title=f"SOZ & IZ")
             
         elif irritative_mask is not None:
             view = plotting.view_img(irritative_mask, 
                                    bg_img=self.mni_template,
                                    cmap='Reds', 
                                    opacity=0.7,
-                                   title=f"3D визуализация: Ирритативная зона - {self.hemisphere} полушарие")
+                                   title=f"IZ")
             
         elif seizure_mask is not None:
             view = plotting.view_img(seizure_mask, 
                                    bg_img=self.mni_template,
                                    cmap='Blues', 
                                    opacity=0.7,
-                                   title=f"3D визуализация: Зона начала приступов - {self.hemisphere} полушарие")
+                                   title=f"3SOZ")
         
         else:
             st.warning("Не выбраны зоны для визуализации")
