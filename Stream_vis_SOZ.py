@@ -75,44 +75,6 @@ class BrainZoneVisualizer:
                 
         return nib.Nifti1Image(mask_data, self.atlas_img.affine)
     
-    def plot_2d_slices(self):
-        """2D визуализация на срезах с белым фоном"""
-        # Создаем маски с учетом выбранного полушария
-        irritative_mask = self.create_zone_mask(self.irritative_zones, 1, self.hemisphere)
-        seizure_mask = self.create_zone_mask(self.seizure_onset_zones, 2, self.hemisphere)
-        
-        # Комбинированная маска
-        if irritative_mask is not None and seizure_mask is not None:
-            combined_mask = math_img("img1 + 2*img2", img1=irritative_mask, img2=seizure_mask)
-            title = f"Ирритативная зона (синий) и Зона начала приступов (красный) - {self.hemisphere} полушарие"
-            cmap = 'coolwarm'
-        elif irritative_mask is not None:
-            combined_mask = irritative_mask
-            title = f"Ирритативная зона (синий) - {self.hemisphere} полушарие"
-            cmap = 'Blues'
-        elif seizure_mask is not None:
-            combined_mask = seizure_mask
-            title = f"Зона начала приступов (красный) - {self.hemisphere} полушарие"
-            cmap = 'Reds'
-        else:
-            st.warning("Не выбраны зоны для визуализации")
-            return
-        
-        # Создаем отдельную фигуру для 2D срезов
-        fig = plt.figure(figsize=(15, 5), facecolor='white')
-        
-        # Визуализация в трех проекциях с использованием display_mode и белым фоном
-        plotting.plot_roi(combined_mask, 
-                         bg_img=self.mni_template,
-                         cmap=cmap, 
-                         alpha=0.7,
-                         display_mode='ortho',
-                         title=title,
-                         black_bg=False)  # Белый фон
-        
-        st.pyplot(fig)
-        plt.close(fig)
-    
     def plot_3d_glass_brain(self):
         """3D glass brain визуализация с черным фоном"""
         # Создаем маски с учетом выбранного полушария
@@ -207,7 +169,7 @@ class BrainZoneVisualizer:
 
 def main():
     st.set_page_config(
-        page_title="Визуализация эпилептогенных зон",
+        page_title="Виузализация эпилептогенных зон",
         page_icon="",
         layout="wide"
     )
@@ -268,12 +230,10 @@ def main():
         # Кнопки визуализации
         st.markdown("---")
         st.subheader("Визуализация")
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
-            plot_2d = st.button("🖼️ 2D срезы")
-        with col2:
             plot_3d = st.button("🧊 3D Glass Brain")
-        with col3:
+        with col2:
             plot_interactive = st.button("🎮 Интерактивная 3D")
     
     # Обновление состояния
@@ -324,11 +284,6 @@ def main():
         st.session_state.hemisphere = "Оба"
         st.rerun()
     
-    if plot_2d:
-        st.subheader("2D срезы")
-        st.info("2D визуализация с белым фоном")
-        visualizer.plot_2d_slices()
-    
     if plot_3d:
         st.subheader("3D Glass Brain")
         st.info("3D визуализация с черным фоном")
@@ -358,7 +313,6 @@ def main():
             
             # Удаляем временный файл
             os.unlink(html_file)
-
 
 if __name__ == "__main__":
     main()
